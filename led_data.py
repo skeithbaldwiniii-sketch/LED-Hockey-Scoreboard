@@ -1164,6 +1164,107 @@ def get_all_games():
     return games
 
 
+def get_previous_day_final_games():
+    """
+    Retrieve completed NHL and PWHL games from the previous
+    calendar day.
+
+    Used by the weekday 6:00 AM - 7:00 AM morning-results mode.
+    """
+
+    from datetime import timedelta
+
+    previous_day = (
+        datetime.now(EST).date()
+        - timedelta(days=1)
+    )
+
+    final_games = []
+
+    # ========================================================
+    # NHL
+    # ========================================================
+
+    try:
+
+        nhl_date_url = (
+            f"https://api-web.nhle.com/v1/score/{previous_day}"
+        )
+
+        response = session.get(
+            nhl_date_url,
+            timeout=10
+        )
+
+        response.raise_for_status()
+        data = response.json()
+
+        for game in data.get("games", []):
+
+            game_data = build_nhl_game(game)
+
+            if not game_data:
+                continue
+
+            if game.get("gameState") == "FINAL":
+                game_data["status"] = "FINAL"
+                final_games.append(game_data)
+
+    except Exception as e:
+
+        print(
+            f"NHL previous-day API error: {e}"
+        )
+
+    # ========================================================
+    # PWHL
+    # ========================================================
+
+    try:
+
+        response = session.get(
+            PWHL_SCHEDULE_URL,
+            timeout=10
+        )
+
+        response.raise_for_status()
+        schedule_data = response.json()
+
+        games = (
+            schedule_data
+            .get("SiteKit", {})
+            .get("Schedule", [])
+        )
+
+        previous_day_string = previous_day.strftime(
+            "%Y-%m-%d"
+        )
+
+        for game in games:
+
+            if game.get(
+                "date_played",
+                ""
+            ) != previous_day_string:
+                continue
+
+            game_data = build_pwhl_game(game)
+
+            if not game_data:
+                continue
+
+            if game_data.get("status") == "FINAL":
+                final_games.append(game_data)
+
+    except Exception as e:
+
+        print(
+            f"PWHL previous-day API error: {e}"
+        )
+
+    return final_games
+
+
 # ============================================================
 # TEST
 # ============================================================

@@ -59,6 +59,12 @@ class PiLEDDisplay(LEDDisplay):
 
         self.canvas.Clear()
 
+        self.canvas = (
+            self.matrix.SwapOnVSync(
+                self.canvas
+            )
+        )
+
 
     # ========================================================
     # SET PIXEL
@@ -124,7 +130,7 @@ class PiLEDDisplay(LEDDisplay):
 
 
         self.canvas = (
-            self.canvas.SwapOnVSync(
+            self.matrix.SwapOnVSync(
                 self.canvas
             )
         )
@@ -139,7 +145,7 @@ class PiLEDDisplay(LEDDisplay):
         self.canvas.Clear()
 
         self.canvas = (
-            self.canvas.SwapOnVSync(
+            self.matrix.SwapOnVSync(
                 self.canvas
             )
         )

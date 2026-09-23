@@ -18,12 +18,18 @@
 
 import time
 
-from led_data import get_all_games
+from led_data import (
+    get_all_games,
+    get_previous_day_final_games,
+)
+
+from scheduler import get_display_mode
 
 from scoreboard_renderer import (
     render_game,
     render_goal,
     render_no_games,
+    render_final,
 )
 
 from led_pi import PiLEDDisplay
@@ -70,11 +76,53 @@ def main():
     # Remember the most recent goal we've already displayed.
     known_goals = {}
 
+    # Track the currently active scheduler mode.
+    previous_mode = None
+
     try:
 
         while True:
 
             now = time.monotonic()
+
+            # ====================================================
+            # DETERMINE SCHEDULE MODE
+            # ====================================================
+
+            mode = get_display_mode()
+
+            # Detect a transition between OFF, MORNING_RESULTS,
+            # and LIVE modes.
+            if mode != previous_mode:
+
+                print()
+                print(
+                    f"Schedule mode changed: "
+                    f"{previous_mode} -> {mode}"
+                )
+
+                # Reset display state when changing modes.
+                games = []
+                current_index = 0
+                last_data_refresh = 0
+                last_carousel_change = time.monotonic()
+
+                goal_alert = None
+                goal_alert_until = 0
+
+                previous_mode = mode
+
+            # ====================================================
+            # OFF MODE
+            # ====================================================
+
+            if mode == "OFF":
+
+                display.clear()
+
+                time.sleep(1)
+
+                continue
 
             # ====================================================
             # REFRESH HOCKEY DATA
@@ -85,93 +133,121 @@ def main():
                 >= DATA_REFRESH_SECONDS
             ):
 
-                print("Refreshing hockey data...")
+                print(
+                    f"Refreshing hockey data "
+                    f"({mode})..."
+                )
 
                 try:
 
-                    new_games = get_all_games()
+                    # ------------------------------------------------
+                    # MORNING RESULTS
+                    # ------------------------------------------------
+
+                    if mode == "MORNING_RESULTS":
+
+                        new_games = (
+                            get_previous_day_final_games()
+                        )
+
+                    # ------------------------------------------------
+                    # NORMAL LIVE MODE
+                    # ------------------------------------------------
+
+                    else:
+
+                        new_games = get_all_games()
 
                     if new_games is None:
                         new_games = []
 
-                    # ------------------------------------------------
-                    # Detect newly scored goals.
-                    # ------------------------------------------------
+                    # =================================================
+                    # GOAL DETECTION
+                    #
+                    # Only active during normal LIVE mode.
+                    # =================================================
 
-                    for game in new_games:
+                    if mode == "LIVE":
 
-                        game_id = game.get(
-                            "game_id"
-                        )
+                        for game in new_games:
 
-                        latest_goal = game.get(
-                            "latest_goal"
-                        )
-
-                        if not game_id:
-                            continue
-
-                        if not latest_goal:
-                            continue
-
-                        goal_id = latest_goal.get(
-                            "goal_id"
-                        )
-
-                        if not goal_id:
-                            continue
-
-                        previous_goal = known_goals.get(
-                            game_id
-                        )
-
-                        # First time seeing a live game:
-                        # record the current goal without announcing it.
-                        if previous_goal is None:
-
-                            known_goals[
-                                game_id
-                            ] = goal_id
-
-                            continue
-
-                        # A different goal ID means a new goal.
-                        if goal_id != previous_goal:
-
-                            print()
-                            print("!!! GOAL DETECTED !!!")
-
-                            print(
-                                game.get("league"),
-                                game.get("away"),
-                                game.get("away_score"),
-                                "-",
-                                game.get("home_score"),
-                                game.get("home")
+                            game_id = game.get(
+                                "game_id"
                             )
 
-                            print(
-                                "Scorer:",
-                                latest_goal.get(
-                                    "scorer"
+                            latest_goal = game.get(
+                                "latest_goal"
+                            )
+
+                            if not game_id:
+                                continue
+
+                            if not latest_goal:
+                                continue
+
+                            goal_id = latest_goal.get(
+                                "goal_id"
+                            )
+
+                            if not goal_id:
+                                continue
+
+                            previous_goal = (
+                                known_goals.get(
+                                    game_id
                                 )
                             )
 
-                            print()
+                            # First time seeing a live game:
+                            # record the current goal without
+                            # announcing it.
+                            if previous_goal is None:
 
-                            goal_alert = (
-                                game,
-                                latest_goal
-                            )
+                                known_goals[
+                                    game_id
+                                ] = goal_id
 
-                            goal_alert_until = (
-                                time.monotonic()
-                                + GOAL_ALERT_SECONDS
-                            )
+                                continue
 
-                            known_goals[
-                                game_id
-                            ] = goal_id
+                            # A different goal ID means a new goal.
+                            if goal_id != previous_goal:
+
+                                print()
+                                print(
+                                    "!!! GOAL DETECTED !!!"
+                                )
+
+                                print(
+                                    game.get("league"),
+                                    game.get("away"),
+                                    game.get("away_score"),
+                                    "-",
+                                    game.get("home_score"),
+                                    game.get("home")
+                                )
+
+                                print(
+                                    "Scorer:",
+                                    latest_goal.get(
+                                        "scorer"
+                                    )
+                                )
+
+                                print()
+
+                                goal_alert = (
+                                    game,
+                                    latest_goal
+                                )
+
+                                goal_alert_until = (
+                                    time.monotonic()
+                                    + GOAL_ALERT_SECONDS
+                                )
+
+                                known_goals[
+                                    game_id
+                                ] = goal_id
 
                     # ------------------------------------------------
                     # Replace current game list.
@@ -205,10 +281,13 @@ def main():
 
             # ====================================================
             # GOAL ALERT
+            #
+            # Only show goal alerts during LIVE mode.
             # ====================================================
 
             if (
-                goal_alert is not None
+                mode == "LIVE"
+                and goal_alert is not None
                 and time.monotonic()
                 < goal_alert_until
             ):
@@ -220,7 +299,9 @@ def main():
                     goal
                 )
 
-                display.draw_frame(frame)
+                display.draw_frame(
+                    frame
+                )
 
                 time.sleep(0.05)
 
@@ -249,7 +330,9 @@ def main():
 
                 frame = render_no_games()
 
-                display.draw_frame(frame)
+                display.draw_frame(
+                    frame
+                )
 
                 time.sleep(0.1)
 
@@ -279,9 +362,17 @@ def main():
 
             game = games[current_index]
 
-            frame = render_game(
-                game
-            )
+            if mode == "MORNING_RESULTS":
+
+                frame = render_final(
+                    game
+                )
+
+            else:
+
+                frame = render_game(
+                    game
+                )
 
             display.draw_frame(
                 frame

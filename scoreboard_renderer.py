@@ -1158,14 +1158,15 @@ def render_live(game):
 
     draw_text_center(
         frame,
-        13,
+        14,
         score_text,
-        WHITE
+        WHITE,
+	FONT_3X5
     )
 
     draw_text(
         frame,
-        54,
+        47,
         13,
         home,
         home_color
@@ -1226,14 +1227,15 @@ def render_final(game):
 
     draw_text_center(
         frame,
-        14,
+        15,
         f"{away_score} - {home_score}",
-        WHITE
+        WHITE,
+        FONT_3X5
     )
 
     draw_text(
         frame,
-        54,
+        47,
         14,
         home,
         home_color
@@ -1245,6 +1247,20 @@ def render_final(game):
 # ============================================================
 # GOAL ALERT
 # ============================================================
+
+def format_scorer_name(name):
+    """Format a full player name as first initial + last name."""
+
+    if not name:
+        return ""
+
+    parts = name.strip().split()
+
+    if len(parts) < 2:
+        return name.strip()
+
+    return f"{parts[0][0]}. {' '.join(parts[1:])}"
+
 
 def render_goal(game, goal):
 
@@ -1283,7 +1299,8 @@ def render_goal(game, goal):
         frame,
         1,
         "GOAL!",
-        YELLOW
+        YELLOW,
+        FONT_3X5
     )
 
     # --------------------------------------------------------
@@ -1299,7 +1316,8 @@ def render_goal(game, goal):
         frame,
         9,
         scoring_team,
-        team_color
+        team_color,
+        FONT_3X5
     )
 
     # --------------------------------------------------------
@@ -1307,15 +1325,28 @@ def render_goal(game, goal):
     # --------------------------------------------------------
 
     scorer_text = fit_text(
-        scorer,
-        58
+        format_scorer_name(scorer),
+        60,
+        FONT_3X5
     )
 
-    draw_text_center(
-        frame,
-        14,
+    scorer_width = text_width(
         scorer_text,
-        WHITE
+        FONT_3X5
+    )
+
+    scorer_x = max(
+        0,
+        (WIDTH - scorer_width) // 2 - 2
+    )
+
+    draw_text(
+        frame,
+        scorer_x,
+        15,
+        scorer_text,
+        WHITE,
+        FONT_3X5
     )
 
     # --------------------------------------------------------
